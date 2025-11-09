@@ -3563,17 +3563,75 @@ def now():
 @app.errorhandler(500)
 def internal_error(error):
     """Manejo de errores internos del servidor"""
-    db.session.rollback()
+    try:
+        db.session.rollback()
+    except:
+        pass  # Si hay error en la sesión, continuar
+    
     import traceback
     error_trace = traceback.format_exc()
     print(f"Error 500: {error}")
     print(f"Traceback: {error_trace}")
-    return render_template('error.html', error=error, traceback=error_trace), 500
+    
+    # Intentar renderizar el template, si falla usar respuesta simple
+    try:
+        return render_template('error.html', error=str(error), traceback=error_trace, message="Error interno del servidor"), 500
+    except Exception as template_error:
+        print(f"Error renderizando template de error: {template_error}")
+        print(f"Error original: {error}")
+        # Fallback: respuesta HTML simple sin depender de templates
+        html_response = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error 500</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }}
+        h1 {{ color: #dc3545; }}
+        .error-box {{ background: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; }}
+    </style>
+</head>
+<body>
+    <h1>Error 500 - Error Interno del Servidor</h1>
+    <div class="error-box">
+        <p>Ha ocurrido un error en el servidor. Por favor, contacta al administrador.</p>
+        <p><strong>Error:</strong> {str(error)}</p>
+    </div>
+    <p><a href="/">Volver al inicio</a></p>
+</body>
+</html>"""
+        return html_response, 500, {'Content-Type': 'text/html; charset=utf-8'}
 
 @app.errorhandler(404)
 def not_found_error(error):
     """Manejo de errores 404"""
-    return render_template('error.html', error=error, message="Página no encontrada"), 404
+    try:
+        return render_template('error.html', error=str(error), message="Página no encontrada"), 404
+    except Exception as template_error:
+        print(f"Error renderizando template de error: {template_error}")
+        # Fallback: respuesta HTML simple sin depender de templates
+        html_response = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error 404</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }}
+        h1 {{ color: #ffc107; }}
+        .error-box {{ background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; }}
+    </style>
+</head>
+<body>
+    <h1>Error 404 - Página no encontrada</h1>
+    <div class="error-box">
+        <p>La página que buscas no existe.</p>
+    </div>
+    <p><a href="/">Volver al inicio</a></p>
+</body>
+</html>"""
+        return html_response, 404, {'Content-Type': 'text/html; charset=utf-8'}
 
 # Inicializar base de datos (solo para desarrollo)
 # En producción, ejecutar: flask db upgrade
