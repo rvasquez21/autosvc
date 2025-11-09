@@ -1328,7 +1328,177 @@ def login():
                 print(f"Error en login (base de datos): {db_error}")
                 flash('Error de conexión a la base de datos. Por favor, contacta al administrador.', 'error')
         
-        return render_template("login.html", form=form)
+        # Intentar renderizar el template, si falla usar HTML inline
+        try:
+            return render_template("login.html", form=form)
+        except Exception as template_error:
+            print(f"Error renderizando template login.html: {template_error}")
+            # Fallback: HTML inline para el formulario de login
+            import html as html_module
+            error_message = ""
+            if form.errors:
+                error_message = "<div style='color: #dc3545; margin-bottom: 15px;'>Por favor, corrige los errores en el formulario.</div>"
+            
+            username_value = form.username.data if form.username.data else ""
+            username_errors = ""
+            if form.username.errors:
+                username_errors = "<div style='color: #dc3545; font-size: 0.875rem; margin-top: 5px;'>" + "<br>".join(form.username.errors) + "</div>"
+            
+            password_errors = ""
+            if form.password.errors:
+                password_errors = "<div style='color: #dc3545; font-size: 0.875rem; margin-top: 5px;'>" + "<br>".join(form.password.errors) + "</div>"
+            
+            # Obtener mensajes flash
+            flash_messages = ""
+            try:
+                from flask import get_flashed_messages
+                messages = get_flashed_messages(with_categories=True)
+                if messages:
+                    flash_html = ""
+                    for category, message in messages:
+                        bg_color = "#d1ecf1" if category == "info" else "#f8d7da" if category == "error" else "#d4edda"
+                        text_color = "#0c5460" if category == "info" else "#721c24" if category == "error" else "#155724"
+                        flash_html += f"<div style='background: {bg_color}; color: {text_color}; padding: 12px; border-radius: 5px; margin-bottom: 15px;'>{message}</div>"
+                    flash_messages = flash_html
+            except:
+                pass
+            
+            html_response = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - AutoSVC</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }}
+        .login-container {{
+            max-width: 400px;
+            width: 100%;
+        }}
+        .login-card {{
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 40px;
+        }}
+        .login-header {{
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        .login-header h2 {{
+            color: #333;
+            margin: 15px 0 5px 0;
+        }}
+        .login-header p {{
+            color: #6c757d;
+            margin: 0;
+        }}
+        .form-group {{
+            margin-bottom: 20px;
+        }}
+        .form-label {{
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }}
+        .form-control {{
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }}
+        .form-control:focus {{
+            outline: none;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+        }}
+        .btn-primary {{
+            width: 100%;
+            padding: 12px;
+            background: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+        }}
+        .btn-primary:hover {{
+            background: #0b5ed7;
+        }}
+        .register-link {{
+            text-align: center;
+            margin-top: 20px;
+        }}
+        .register-link a {{
+            color: #0d6efd;
+            text-decoration: none;
+        }}
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div style="font-size: 3rem; margin-bottom: 10px;">⚙️</div>
+                <h2>AutoSVC</h2>
+                <p>Sistema de Gestión de Taller</p>
+            </div>
+            
+            {flash_messages}
+            {error_message}
+            
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{form.csrf_token.current_token if hasattr(form, 'csrf_token') and form.csrf_token else ''}">
+                
+                <div class="form-group">
+                    <label for="username" class="form-label">👤 Usuario</label>
+                    <input type="text" 
+                           id="username" 
+                           name="username" 
+                           class="form-control" 
+                           placeholder="Ingresa tu usuario" 
+                           value="{html_module.escape(username_value)}" 
+                           required>
+                    {username_errors}
+                </div>
+                
+                <div class="form-group">
+                    <label for="password" class="form-label">🔒 Contraseña</label>
+                    <input type="password" 
+                           id="password" 
+                           name="password" 
+                           class="form-control" 
+                           placeholder="Ingresa tu contraseña" 
+                           required>
+                    {password_errors}
+                </div>
+                
+                <button type="submit" class="btn-primary">Iniciar Sesión</button>
+            </form>
+            
+            <div class="register-link">
+                <p style="color: #6c757d; margin: 0;">
+                    ¿No tienes cuenta? 
+                    <a href="/register">Regístrate aquí</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+            return html_response, 200, {'Content-Type': 'text/html; charset=utf-8'}
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
