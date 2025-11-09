@@ -23,8 +23,13 @@ ALLOWED_EXTENSIONS = {'xls', 'xlsx', 'csv'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
-# Crear directorio de uploads si no existe
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# Crear directorios necesarios si no existen
+try:
+    os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+    os.makedirs(os.path.join(UPLOAD_FOLDER, 'insurance_orders'), exist_ok=True)
+    os.makedirs('instance', exist_ok=True)
+except Exception as e:
+    print(f"Warning: No se pudieron crear algunos directorios: {e}")
 
 # Configurar Flask-Login
 login_manager = LoginManager()
@@ -3548,6 +3553,34 @@ def validate_advisor_links():
 def now():
     """Función para obtener la fecha y hora actual en templates"""
     return datetime.utcnow()
+
+# Manejo de errores para producción
+@app.errorhandler(500)
+def internal_error(error):
+    """Manejo de errores internos del servidor"""
+    db.session.rollback()
+    import traceback
+    error_trace = traceback.format_exc()
+    print(f"Error 500: {error}")
+    print(f"Traceback: {error_trace}")
+    return render_template('error.html', error=error, traceback=error_trace), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    """Manejo de errores 404"""
+    return render_template('error.html', error=error, message="Página no encontrada"), 404
+
+# Inicializar base de datos (solo para desarrollo)
+# En producción, ejecutar: flask db upgrade
+with app.app_context():
+    try:
+        # Solo crear tablas en desarrollo si no están en producción
+        if os.environ.get('FLASK_ENV') != 'production' and not os.environ.get('DATABASE_URL'):
+            db.create_all()
+            print("✅ Tablas de base de datos inicializadas")
+    except Exception as e:
+        print(f"⚠️ Warning: No se pudieron crear las tablas automáticamente: {e}")
+        print("💡 En producción, ejecuta: flask db upgrade")
 
 if __name__ == "__main__":
     # Allow debug during development
