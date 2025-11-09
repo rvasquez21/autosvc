@@ -1867,15 +1867,220 @@ def dashboard():
         # Obtener colores de estado desde la base de datos
         status_colors = get_status_colors()
 
-        return render_template("dashboard.html",
-                             counts=counts,
-                             total=total,
-                             oldest_days=oldest_days,
-                             long_15=long_15,
-                             STATUS_CHOICES=status_choices,
-                             status_colors=status_colors,
-                             brands=brands,
-                             selected_brand=brand_filter)
+        # Intentar renderizar el template, si falla usar HTML inline
+        try:
+            return render_template("dashboard.html",
+                                 counts=counts,
+                                 total=total,
+                                 oldest_days=oldest_days,
+                                 long_15=long_15,
+                                 STATUS_CHOICES=status_choices,
+                                 status_colors=status_colors,
+                                 brands=brands,
+                                 selected_brand=brand_filter)
+        except Exception as template_error:
+            print(f"Error renderizando template dashboard.html: {template_error}")
+            # Fallback: HTML inline para el dashboard
+            import html as html_module
+            
+            # Generar HTML para conteos por estatus
+            status_cards = ""
+            for status_name, display_name in status_choices:
+                count = counts.get(status_name, 0)
+                color = status_colors.get(status_name, "#6c757d")
+                status_cards += f"""
+                <div style="background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center;">
+                    <div style="font-size: 2.5rem; font-weight: bold; color: {color}; margin-bottom: 10px;">{count}</div>
+                    <div style="color: #6c757d; font-size: 0.9rem;">{html_module.escape(display_name)}</div>
+                </div>"""
+            
+            # Generar HTML para órdenes con 15+ días
+            long_orders_html = ""
+            if long_15:
+                for order in long_15:
+                    long_orders_html += f"""
+                    <tr>
+                        <td>{order.id}</td>
+                        <td><a href="/orders/{order.id}" style="color: #0d6efd; text-decoration: none;">{html_module.escape(order.order_number)}</a></td>
+                        <td><span style="background: #0dcaf0; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(order.modelo or '-')}</span></td>
+                        <td><span style="background: #0d6efd; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(order.brand or '-')}</span></td>
+                        <td><span style="background: #6c757d; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(order.plate)}</span></td>
+                        <td>{html_module.escape(order.customer_name)}</td>
+                        <td><strong>{order.days_in_shop()}</strong></td>
+                        <td><span style="background: {status_colors.get(order.status, '#6c757d')}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(order.status)}</span></td>
+                    </tr>"""
+            else:
+                long_orders_html = "<tr><td colspan='8' style='text-align: center; color: #6c757d; padding: 20px;'>No hay órdenes con 15+ días en taller</td></tr>"
+            
+            # Generar opciones de filtro de marca
+            brand_options = '<option value="">Todas las marcas</option>'
+            for brand in brands:
+                selected = "selected" if brand == brand_filter else ""
+                brand_options += f'<option value="{html_module.escape(brand)}" {selected}>{html_module.escape(brand)}</option>'
+            
+            html_response = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - AutoSVC</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }}
+        .header {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }}
+        .header h1 {{
+            margin: 0 0 10px 0;
+        }}
+        .stats-grid {{
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }}
+        .card {{
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        .card h3 {{
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+        }}
+        .table-container {{
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow-x: auto;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+        }}
+        th, td {{
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }}
+        th {{
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+        }}
+        .filter-section {{
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        .btn {{
+            padding: 10px 20px;
+            background: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }}
+        .btn:hover {{
+            background: #0b5ed7;
+        }}
+        .nav {{
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }}
+        .nav a {{
+            color: #0d6efd;
+            text-decoration: none;
+            margin-right: 20px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📊 Dashboard - AutoSVC</h1>
+        <p>Bienvenido, {html_module.escape(current_user.full_name if current_user.is_authenticated else 'Usuario')}</p>
+    </div>
+    
+    <div class="nav">
+        <a href="/orders">📋 Órdenes</a>
+        <a href="/notifications">🔔 Notificaciones</a>
+        <a href="/logout">🚪 Salir</a>
+    </div>
+    
+    <div class="filter-section">
+        <form method="GET" style="display: flex; gap: 10px; align-items: center;">
+            <label style="font-weight: 500;">Filtrar por marca:</label>
+            <select name="brand" style="padding: 8px; border: 1px solid #ddd; border-radius: 5px; flex: 1; max-width: 300px;">
+                {brand_options}
+            </select>
+            <button type="submit" class="btn">Filtrar</button>
+            <a href="/" class="btn" style="background: #6c757d;">Limpiar</a>
+        </form>
+    </div>
+    
+    <div class="card" style="margin-bottom: 20px;">
+        <h3>📈 Resumen General</h3>
+        <div style="font-size: 2rem; font-weight: bold; color: #0d6efd; margin: 10px 0;">
+            Total de Órdenes: {total}
+        </div>
+        <div style="color: #6c757d;">
+            Orden más antigua: {oldest_days} días en taller
+        </div>
+    </div>
+    
+    <div class="card">
+        <h3>📊 Órdenes por Estatus</h3>
+        <div class="stats-grid">
+            {status_cards}
+        </div>
+    </div>
+    
+    <div class="table-container">
+        <h3 style="margin-bottom: 20px;">⚠️ Órdenes con 15+ días en taller ({len(long_15)})</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Orden</th>
+                    <th>Modelo</th>
+                    <th>Marca</th>
+                    <th>Placa</th>
+                    <th>Cliente</th>
+                    <th>Días</th>
+                    <th>Estatus</th>
+                </tr>
+            </thead>
+            <tbody>
+                {long_orders_html}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>"""
+            return html_response, 200, {'Content-Type': 'text/html; charset=utf-8'}
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
