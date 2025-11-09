@@ -24,9 +24,26 @@ flask db upgrade
 python seeds.py  # Datos de ejemplo
 ```
 5) Ejecuta:
+
+**Opción A - Desarrollo (Windows/Linux/Mac):**
 ```bash
 python app.py
+# o
+flask run
 # Abre http://localhost:5000
+```
+
+**Opción B - Producción con Waitress (Windows/Linux/Mac):**
+```bash
+py run.py
+# o directamente:
+py -m waitress --listen=127.0.0.1:5000 app:app
+# Abre http://localhost:5000
+```
+
+**Opción C - Producción con Gunicorn (solo Linux/Mac):**
+```bash
+gunicorn --bind 0.0.0.0:5000 app:app
 ```
 
 ## Estados predefinidos
@@ -35,8 +52,9 @@ RECEPCION, DIAGNOSTICO, PRESUPUESTO, APROBACION, EN_REPARACION, ESPERA_REPUESTO,
 ## Deploy rápido (VPS)
 - Instala Python 3.10+, `pip`, `venv`
 - Configura variables de entorno (`.env`), apunta a MySQL
-- Usa `gunicorn --bind 0.0.0.0:5000 app:app` detrás de Nginx
-- Activa un servicio systemd para mantenerlo activo
+- **Linux/Mac:** Usa `gunicorn --bind 0.0.0.0:5000 app:app` detrás de Nginx
+- **Windows:** Usa `waitress-serve --listen=0.0.0.0:5000 app:app` o `py run.py`
+- Activa un servicio systemd (Linux) o servicio de Windows para mantenerlo activo
 
 ## Próximos pasos sugeridos
 - Autenticación (Flask-Login) por roles (asesor, técnico, admin)
