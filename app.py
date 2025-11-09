@@ -1509,34 +1509,289 @@ def login():
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    
-    form = RegisterForm()
-    if form.validate_on_submit():
-        # Verificar si el usuario ya existe
-        if User.query.filter_by(username=form.username.data).first():
-            flash('El nombre de usuario ya existe', 'error')
+    try:
+        if current_user.is_authenticated:
+            return redirect(url_for('dashboard'))
+        
+        form = RegisterForm()
+        if form.validate_on_submit():
+            try:
+                # Verificar si el usuario ya existe
+                if User.query.filter_by(username=form.username.data).first():
+                    flash('El nombre de usuario ya existe', 'error')
+                    # Continuar para mostrar el formulario con el error
+                elif User.query.filter_by(email=form.email.data).first():
+                    flash('El email ya está registrado', 'error')
+                    # Continuar para mostrar el formulario con el error
+                else:
+                    user = User(
+                        username=form.username.data,
+                        email=form.email.data,
+                        full_name=form.full_name.data,
+                        role=form.role.data
+                    )
+                    user.set_password(form.password.data)
+                    db.session.add(user)
+                    db.session.commit()
+                    
+                    flash('Usuario registrado exitosamente. Puedes iniciar sesión.', 'success')
+                    return redirect(url_for('login'))
+            except Exception as db_error:
+                print(f"Error en registro (base de datos): {db_error}")
+                flash('Error de conexión a la base de datos. Por favor, contacta al administrador.', 'error')
+        
+        # Intentar renderizar el template, si falla usar HTML inline
+        try:
             return render_template("register.html", form=form)
-        
-        if User.query.filter_by(email=form.email.data).first():
-            flash('El email ya está registrado', 'error')
-            return render_template("register.html", form=form)
-        
-        user = User(
-            username=form.username.data,
-            email=form.email.data,
-            full_name=form.full_name.data,
-            role=form.role.data
-        )
-        user.set_password(form.password.data)
-        db.session.add(user)
-        db.session.commit()
-        
-        flash('Usuario registrado exitosamente. Puedes iniciar sesión.', 'success')
-        return redirect(url_for('login'))
-    
-    return render_template("register.html", form=form)
+        except Exception as template_error:
+            print(f"Error renderizando template register.html: {template_error}")
+            # Fallback: HTML inline para el formulario de registro
+            import html as html_module
+            
+            # Obtener valores del formulario
+            username_value = form.username.data if form.username.data else ""
+            email_value = form.email.data if form.email.data else ""
+            full_name_value = form.full_name.data if form.full_name.data else ""
+            role_value = form.role.data if form.role.data else "TECNICO"
+            
+            # Generar opciones de rol
+            role_options = ""
+            role_choices = [
+                ('TECNICO', 'Técnico'),
+                ('ASESOR', 'Asesor'),
+                ('ADMIN', 'Administrador'),
+                ('JEFE_TALLER', 'Jefe de Taller'),
+                ('SUPERVISOR', 'Supervisor')
+            ]
+            for value, label in role_choices:
+                selected = "selected" if value == role_value else ""
+                role_options += f'<option value="{html_module.escape(value)}" {selected}>{html_module.escape(label)}</option>'
+            
+            # Errores de campos
+            username_errors = "<br>".join(form.username.errors) if form.username.errors else ""
+            email_errors = "<br>".join(form.email.errors) if form.email.errors else ""
+            full_name_errors = "<br>".join(form.full_name.errors) if form.full_name.errors else ""
+            password_errors = "<br>".join(form.password.errors) if form.password.errors else ""
+            role_errors = "<br>".join(form.role.errors) if form.role.errors else ""
+            
+            # Obtener mensajes flash
+            flash_messages = ""
+            try:
+                from flask import get_flashed_messages
+                messages = get_flashed_messages(with_categories=True)
+                if messages:
+                    flash_html = ""
+                    for category, message in messages:
+                        bg_color = "#d1ecf1" if category == "info" else "#f8d7da" if category == "error" else "#d4edda"
+                        text_color = "#0c5460" if category == "info" else "#721c24" if category == "error" else "#155724"
+                        flash_html += f"<div style='background: {bg_color}; color: {text_color}; padding: 12px; border-radius: 5px; margin-bottom: 15px;'>{html_module.escape(message)}</div>"
+                    flash_messages = flash_html
+            except:
+                pass
+            
+            html_response = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registrarse - AutoSVC</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {{
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            padding: 20px;
+        }}
+        .register-container {{
+            max-width: 600px;
+            width: 100%;
+        }}
+        .register-card {{
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 40px;
+        }}
+        .register-header {{
+            text-align: center;
+            margin-bottom: 30px;
+        }}
+        .register-header h2 {{
+            color: #333;
+            margin: 15px 0 5px 0;
+        }}
+        .register-header p {{
+            color: #6c757d;
+            margin: 0;
+        }}
+        .form-group {{
+            margin-bottom: 20px;
+        }}
+        .form-label {{
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }}
+        .form-control, .form-select {{
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 1rem;
+        }}
+        .form-control:focus, .form-select:focus {{
+            outline: none;
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.1);
+        }}
+        .row {{
+            display: flex;
+            gap: 15px;
+        }}
+        .col-md-6 {{
+            flex: 1;
+        }}
+        .error-text {{
+            color: #dc3545;
+            font-size: 0.875rem;
+            margin-top: 5px;
+        }}
+        .btn-primary {{
+            width: 100%;
+            padding: 12px;
+            background: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+        }}
+        .btn-primary:hover {{
+            background: #0b5ed7;
+        }}
+        .login-link {{
+            text-align: center;
+            margin-top: 20px;
+        }}
+        .login-link a {{
+            color: #0d6efd;
+            text-decoration: none;
+        }}
+        @media (max-width: 768px) {{
+            .row {{
+                flex-direction: column;
+            }}
+        }}
+    </style>
+</head>
+<body>
+    <div class="register-container">
+        <div class="register-card">
+            <div class="register-header">
+                <div style="font-size: 3rem; margin-bottom: 10px;">👤</div>
+                <h2>Registro de Usuario</h2>
+                <p>Crea tu cuenta en AutoSVC</p>
+            </div>
+            
+            {flash_messages}
+            
+            <form method="POST">
+                <input type="hidden" name="csrf_token" value="{form.csrf_token.current_token if hasattr(form, 'csrf_token') and form.csrf_token else ''}">
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="username" class="form-label">👤 Usuario</label>
+                            <input type="text" 
+                                   id="username" 
+                                   name="username" 
+                                   class="form-control" 
+                                   placeholder="Nombre de usuario" 
+                                   value="{html_module.escape(username_value)}" 
+                                   required>
+                            {f'<div class="error-text">{html_module.escape(username_errors)}</div>' if username_errors else ''}
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="email" class="form-label">📧 Email</label>
+                            <input type="email" 
+                                   id="email" 
+                                   name="email" 
+                                   class="form-control" 
+                                   placeholder="tu@email.com" 
+                                   value="{html_module.escape(email_value)}" 
+                                   required>
+                            {f'<div class="error-text">{html_module.escape(email_errors)}</div>' if email_errors else ''}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="full_name" class="form-label">📝 Nombre Completo</label>
+                    <input type="text" 
+                           id="full_name" 
+                           name="full_name" 
+                           class="form-control" 
+                           placeholder="Tu nombre completo" 
+                           value="{html_module.escape(full_name_value)}" 
+                           required>
+                    {f'<div class="error-text">{html_module.escape(full_name_errors)}</div>' if full_name_errors else ''}
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="password" class="form-label">🔒 Contraseña</label>
+                            <input type="password" 
+                                   id="password" 
+                                   name="password" 
+                                   class="form-control" 
+                                   placeholder="Mínimo 6 caracteres" 
+                                   required>
+                            {f'<div class="error-text">{html_module.escape(password_errors)}</div>' if password_errors else ''}
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="role" class="form-label">🛡️ Rol</label>
+                            <select id="role" name="role" class="form-select" required>
+                                {role_options}
+                            </select>
+                            {f'<div class="error-text">{html_module.escape(role_errors)}</div>' if role_errors else ''}
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn-primary">Registrarse</button>
+            </form>
+            
+            <div class="login-link">
+                <p style="color: #6c757d; margin: 0;">
+                    ¿Ya tienes cuenta? 
+                    <a href="/login">Inicia sesión aquí</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+            return html_response, 200, {'Content-Type': 'text/html; charset=utf-8'}
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error en ruta /register: {e}")
+        print(f"Traceback: {error_trace}")
+        # Re-lanzar para que el handler de errores lo capture
+        raise
 
 @app.route("/logout")
 @login_required
