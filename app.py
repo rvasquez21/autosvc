@@ -3614,7 +3614,7 @@ def now():
 # Manejo de errores para producción
 @app.errorhandler(500)
 def internal_error(error):
-    """Manejo de errores internos del servidor"""
+    """Manejo de errores internos del servidor - Usa HTML inline para evitar dependencias"""
     try:
         db.session.rollback()
     except:
@@ -3625,54 +3625,42 @@ def internal_error(error):
     print(f"Error 500: {error}")
     print(f"Traceback: {error_trace}")
     
-    # Intentar renderizar el template, si falla usar respuesta simple
-    try:
-        # Mostrar traceback solo en desarrollo
-        show_traceback = os.environ.get('FLASK_ENV') != 'production' or os.environ.get('FLASK_DEBUG') == '1'
-        # Preparar variables de forma segura
-        error_str = str(error) if error else "Error desconocido"
-        message_str = "Error interno del servidor"
-        traceback_str = error_trace if show_traceback else None
-        
-        # Intentar renderizar con contexto mínimo
-        try:
-            return render_template('error.html', 
-                                 error=error_str, 
-                                 traceback=traceback_str, 
-                                 message=message_str), 500
-        except Exception as render_error:
-            # Si el render falla, puede ser por contexto corrupto, intentar con contexto limpio
-            print(f"Error en render_template: {render_error}")
-            import traceback as tb
-            print(f"Traceback del render_error: {tb.format_exc()}")
-            # Crear un contexto mínimo
-            from flask import has_request_context
-            if not has_request_context():
-                # Si no hay contexto de request, crear uno mínimo
-                try:
-                    with app.test_request_context('/'):
-                        return render_template('error.html', 
-                                             error=error_str, 
-                                             traceback=traceback_str, 
-                                             message=message_str), 500
-                except Exception as context_error:
-                    print(f"Error con contexto de test: {context_error}")
-                    raise render_error
-            else:
-                raise render_error
-    except Exception as template_error:
-        print(f"Error renderizando template de error: {template_error}")
-        print(f"Error original: {error}")
-        import traceback as tb
-        print(f"Traceback del error de template: {tb.format_exc()}")
-        # Fallback: respuesta HTML simple sin depender de templates ni contexto de Flask
-        html_response = f"""<!DOCTYPE html>
+    # Preparar variables de forma segura
+    error_str = str(error) if error else "Error desconocido"
+    message_str = "Error interno del servidor"
+    
+    # Mostrar traceback solo en desarrollo
+    show_traceback = os.environ.get('FLASK_ENV') != 'production' or os.environ.get('FLASK_DEBUG') == '1'
+    traceback_html = ""
+    if show_traceback and error_trace:
+        # Escapar HTML en el traceback
+        import html
+        escaped_traceback = html.escape(error_trace)
+        traceback_html = f"""
+                    <div style="margin-top: 20px;">
+                        <h6 style="color: #6c757d;">Detalles técnicos (solo en desarrollo):</h6>
+                        <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 5px; padding: 15px; margin-top: 10px; max-height: 400px; overflow-y: auto; font-size: 0.85rem;">
+                            <pre style="margin: 0; white-space: pre-wrap; word-wrap: break-word; font-family: 'Courier New', monospace;"><code>{escaped_traceback}</code></pre>
+                        </div>
+                    </div>"""
+    
+    # Usar HTML inline directamente - NO depender de templates
+    # Esto garantiza que siempre funcione, incluso si el template no existe
+    import html as html_module
+    escaped_error = html_module.escape(error_str)
+    
+    html_response = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Error 500 - AutoSVC</title>
     <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
         body {{
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -3697,10 +3685,26 @@ def internal_error(error):
             padding: 30px;
             text-align: center;
         }}
+        .error-header h1 {{
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+        }}
+        .error-header p {{
+            margin: 0;
+            font-size: 1.1rem;
+        }}
         .error-body {{
             padding: 30px;
         }}
-        h1 {{ color: #dc3545; margin: 0 0 20px 0; }}
+        .error-body h5 {{
+            color: #dc3545;
+            margin-bottom: 15px;
+            font-size: 1.25rem;
+        }}
+        .error-body p {{
+            color: #6c757d;
+            margin-bottom: 15px;
+        }}
         .error-box {{
             background: #f8d7da;
             border: 1px solid #f5c6cb;
@@ -3708,9 +3712,137 @@ def internal_error(error):
             border-radius: 5px;
             margin: 20px 0;
         }}
+        .error-box p {{
+            margin: 5px 0;
+        }}
+        .error-box strong {{
+            color: #721c24;
+        }}
+        .btn-container {{
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }}
+        .btn {{
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            text-align: center;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s;
+        }}
+        .btn-primary {{
+            background: #0d6efd;
+            color: white;
+        }}
+        .btn-primary:hover {{
+            background: #0b5ed7;
+        }}
+        .btn-secondary {{
+            background: #6c757d;
+            color: white;
+        }}
+        .btn-secondary:hover {{
+            background: #5a6268;
+        }}
+        .traceback-box {{
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-size: 0.85rem;
+        }}
+        .traceback-box pre {{
+            margin: 0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-family: 'Courier New', monospace;
+        }}
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-header">
+            <h1>⚠️ Error 500</h1>
+            <p>Error Interno del Servidor</p>
+        </div>
+        <div class="error-body">
+            <h5>Ha ocurrido un error</h5>
+            <p>{message_str}</p>
+            <div class="error-box">
+                <p><strong>Detalles:</strong> {escaped_error}</p>
+            </div>
+            {traceback_html}
+            <div class="btn-container">
+                <a href="/" class="btn btn-primary">🏠 Volver al Dashboard</a>
+                <button onclick="history.back()" class="btn btn-secondary">← Volver Atrás</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+    return html_response, 500, {'Content-Type': 'text/html; charset=utf-8'}
+
+@app.errorhandler(404)
+def not_found_error(error):
+    """Manejo de errores 404 - Usa HTML inline para evitar dependencias"""
+    # Usar HTML inline directamente - NO depender de templates
+    html_response = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Error 404 - AutoSVC</title>
+    <style>
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 20px;
+        }}
+        .error-container {{
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }}
+        .error-header {{
+            background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }}
+        .error-header h1 {{
+            margin: 0 0 10px 0;
+            font-size: 2rem;
+        }}
+        .error-body {{
+            padding: 30px;
+        }}
+        .error-body p {{
+            color: #6c757d;
+            margin-bottom: 15px;
+        }}
         .btn {{
             display: inline-block;
-            padding: 10px 20px;
+            padding: 12px 20px;
             background: #0d6efd;
             color: white;
             text-decoration: none;
@@ -3725,51 +3857,17 @@ def internal_error(error):
 <body>
     <div class="error-container">
         <div class="error-header">
-            <h1>⚠️ Error 500</h1>
-            <p style="margin: 0;">Error Interno del Servidor</p>
+            <h1>🔍 Error 404</h1>
+            <p>Página no encontrada</p>
         </div>
         <div class="error-body">
-            <div class="error-box">
-                <p><strong>Ha ocurrido un error en el servidor.</strong></p>
-                <p>Por favor, contacta al administrador del sistema.</p>
-                <p><strong>Error:</strong> {str(error)}</p>
-            </div>
-            <a href="/" class="btn">Volver al inicio</a>
+            <p>La página que buscas no existe.</p>
+            <a href="/" class="btn">🏠 Volver al inicio</a>
         </div>
     </div>
 </body>
 </html>"""
-        return html_response, 500, {'Content-Type': 'text/html; charset=utf-8'}
-
-@app.errorhandler(404)
-def not_found_error(error):
-    """Manejo de errores 404"""
-    try:
-        return render_template('error.html', error=str(error), message="Página no encontrada"), 404
-    except Exception as template_error:
-        print(f"Error renderizando template de error: {template_error}")
-        # Fallback: respuesta HTML simple sin depender de templates
-        html_response = f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Error 404</title>
-    <style>
-        body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }}
-        h1 {{ color: #ffc107; }}
-        .error-box {{ background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; }}
-    </style>
-</head>
-<body>
-    <h1>Error 404 - Página no encontrada</h1>
-    <div class="error-box">
-        <p>La página que buscas no existe.</p>
-    </div>
-    <p><a href="/">Volver al inicio</a></p>
-</body>
-</html>"""
-        return html_response, 404, {'Content-Type': 'text/html; charset=utf-8'}
+    return html_response, 404, {'Content-Type': 'text/html; charset=utf-8'}
 
 # Inicializar base de datos (solo para desarrollo)
 # En producción, ejecutar: flask db upgrade
