@@ -1,5 +1,65 @@
 # Guía de Despliegue en Render
 
+## 🔍 Diagnóstico de Errores 500
+
+Si ves un error 500 después del despliegue, sigue estos pasos:
+
+### 1. Verificar Logs en Render
+1. Ve a tu servicio en Render
+2. Haz clic en "Logs" en el menú lateral
+3. Busca mensajes de error que indiquen:
+   - `no such table` → Las migraciones no se aplicaron
+   - `connection refused` → Problema con DATABASE_URL
+   - `column does not exist` → Migraciones desactualizadas
+
+### 2. Ejecutar Diagnóstico Localmente
+Si tienes acceso a la base de datos, ejecuta:
+```bash
+python diagnose_db.py
+```
+
+Este script verificará:
+- ✅ Conexión a la base de datos
+- ✅ Existencia de tablas requeridas
+- ✅ Estructura de columnas
+- ✅ Datos básicos
+
+### 3. Problemas Comunes y Soluciones
+
+#### Error: "no such table: orders"
+**Causa:** Las migraciones no se aplicaron
+**Solución:**
+```bash
+# En Render, ve a "Shell" y ejecuta:
+flask db upgrade
+```
+
+#### Error: "connection refused" o "could not connect"
+**Causa:** DATABASE_URL incorrecto o base de datos no disponible
+**Solución:**
+1. Verifica que DATABASE_URL esté configurado en Render (Environment)
+2. Verifica que el servicio de PostgreSQL esté corriendo
+3. Verifica que las credenciales sean correctas
+
+#### Error: "column does not exist: orders.modelo"
+**Causa:** Migraciones desactualizadas
+**Solución:**
+```bash
+# En Render Shell:
+flask db upgrade
+```
+
+### 4. Forzar Re-ejecución de Migraciones
+Si las migraciones fallaron durante el build:
+1. Ve a "Environment" en Render
+2. Agrega variable: `FORCE_MIGRATE=true`
+3. Guarda y espera el redeploy
+4. O ejecuta manualmente en Shell:
+```bash
+flask db upgrade --sql  # Ver SQL sin ejecutar
+flask db upgrade        # Ejecutar migraciones
+```
+
 ## Configuración Requerida en Render
 
 ### 1. Variables de Entorno

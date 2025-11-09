@@ -1356,56 +1356,86 @@ def logout():
 @app.route("/")
 @login_required
 def dashboard():
-    # Obtener parámetros de filtro
-    brand_filter = request.args.get("brand", "")
-    
-    # Obtener estatus dinámicos
-    status_choices = get_status_choices()
-    status_names = [s[0] for s in status_choices]
-    
-    # Query base filtrada por rol del usuario
-    base_query = get_orders_for_user(current_user)
-    if brand_filter:
-        base_query = base_query.filter(Order.brand.like(f"%{brand_filter}%"))
-    
-    # Aggregate counts per status con filtro de marca
-    counts = {}
-    for status in status_names:
-        status_query = base_query.filter_by(status=status)
-        counts[status] = status_query.count()
-    
-    total = sum(counts.values())
-    
-    # Órdenes más antiguas con filtro
-    oldest_query = base_query.order_by(Order.created_at.asc())
-    oldest = oldest_query.first()
-    oldest_days = oldest.days_in_shop() if oldest else 0
-    
-    # Órdenes con 15+ días con filtro
-    long_stays_query = base_query.filter(Order.status != "ENTREGADO")
-    long_stays = long_stays_query.all()
-    long_15 = [o for o in long_stays if o.days_in_shop() >= 15]
-    
-    # Cargar comentarios para las órdenes con 15+ días
-    for order in long_15:
-        order.comments = OrderComment.query.filter_by(order_id=order.id).order_by(OrderComment.created_at.desc()).all()
-    
-    # Obtener marcas únicas para el filtro
-    brands = db.session.query(Order.brand).filter(Order.brand.isnot(None)).distinct().all()
-    brands = [b[0] for b in brands if b[0]]
+    try:
+        # Obtener parámetros de filtro
+        brand_filter = request.args.get("brand", "")
+        
+        # Obtener estatus dinámicos
+        status_choices = get_status_choices()
+        status_names = [s[0] for s in status_choices]
+        
+        # Query base filtrada por rol del usuario
+        base_query = get_orders_for_user(current_user)
+        if brand_filter:
+            base_query = base_query.filter(Order.brand.like(f"%{brand_filter}%"))
+        
+        # Aggregate counts per status con filtro de marca
+        counts = {}
+        for status in status_names:
+            try:
+                status_query = base_query.filter_by(status=status)
+                counts[status] = status_query.count()
+            except Exception as e:
+                print(f"Error contando estatus {status}: {e}")
+                counts[status] = 0
+        
+        total = sum(counts.values())
+        
+        # Órdenes más antiguas con filtro
+        oldest = None
+        oldest_days = 0
+        try:
+            oldest_query = base_query.order_by(Order.created_at.asc())
+            oldest = oldest_query.first()
+            if oldest:
+                oldest_days = oldest.days_in_shop()
+        except Exception as e:
+            print(f"Error obteniendo orden más antigua: {e}")
+        
+        # Órdenes con 15+ días con filtro
+        long_15 = []
+        try:
+            long_stays_query = base_query.filter(Order.status != "ENTREGADO")
+            long_stays = long_stays_query.all()
+            long_15 = [o for o in long_stays if o.days_in_shop() >= 15]
+            
+            # Cargar comentarios para las órdenes con 15+ días
+            for order in long_15:
+                try:
+                    order.comments = OrderComment.query.filter_by(order_id=order.id).order_by(OrderComment.created_at.desc()).all()
+                except Exception as e:
+                    print(f"Error cargando comentarios para orden {order.id}: {e}")
+                    order.comments = []
+        except Exception as e:
+            print(f"Error obteniendo órdenes con 15+ días: {e}")
+        
+        # Obtener marcas únicas para el filtro
+        brands = []
+        try:
+            brands_query = db.session.query(Order.brand).filter(Order.brand.isnot(None)).distinct().all()
+            brands = [b[0] for b in brands_query if b[0]]
+        except Exception as e:
+            print(f"Error obteniendo marcas: {e}")
 
-    # Obtener colores de estado desde la base de datos
-    status_colors = get_status_colors()
+        # Obtener colores de estado desde la base de datos
+        status_colors = get_status_colors()
 
-    return render_template("dashboard.html",
-                         counts=counts,
-                         total=total,
-                         oldest_days=oldest_days,
-                         long_15=long_15,
-                         STATUS_CHOICES=status_choices,
-                         status_colors=status_colors,
-                         brands=brands,
-                         selected_brand=brand_filter)
+        return render_template("dashboard.html",
+                             counts=counts,
+                             total=total,
+                             oldest_days=oldest_days,
+                             long_15=long_15,
+                             STATUS_CHOICES=status_choices,
+                             status_colors=status_colors,
+                             brands=brands,
+                             selected_brand=brand_filter)
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error en dashboard: {e}")
+        print(f"Traceback: {error_trace}")
+        # Re-lanzar el error para que el handler de errores lo capture
+        raise
 
 @app.route("/orders")
 @login_required
@@ -3575,7 +3605,12 @@ def internal_error(error):
     
     # Intentar renderizar el template, si falla usar respuesta simple
     try:
-        return render_template('error.html', error=str(error), traceback=error_trace, message="Error interno del servidor"), 500
+        # Mostrar traceback solo en desarrollo
+        show_traceback = os.environ.get('FLASK_ENV') != 'production' or os.environ.get('FLASK_DEBUG') == '1'
+        return render_template('error.html', 
+                             error=str(error), 
+                             traceback=error_trace if show_traceback else None, 
+                             message="Error interno del servidor"), 500
     except Exception as template_error:
         print(f"Error renderizando template de error: {template_error}")
         print(f"Error original: {error}")
