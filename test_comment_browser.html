@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba de Comentarios</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Prueba de Funcionalidad de Comentarios</h2>
+        
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-chat-dots me-2"></i>Comentarios
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Formulario de comentarios -->
+                <div class="mb-4">
+                    <form id="commentForm">
+                        <div class="mb-2">
+                            <label class="form-label small">Nuevo comentario:</label>
+                            <textarea id="commentText" class="form-control" rows="3" 
+                                      placeholder="Escribe tu comentario aquí..."></textarea>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-md-6">
+                                <input type="text" id="commentAuthor" class="form-control" 
+                                       placeholder="Tu nombre" value="Usuario de Prueba">
+                            </div>
+                            <div class="col-md-6">
+                                <select id="commentType" class="form-select">
+                                    <option value="GENERAL">General</option>
+                                    <option value="INTERNAL">Interno</option>
+                                    <option value="CUSTOMER">Cliente</option>
+                                </select>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-sm mt-2">
+                            <i class="bi bi-plus-square me-1"></i>Agregar Comentario
+                        </button>
+                    </form>
+                </div>
+                
+                <!-- Lista de comentarios -->
+                <div id="commentsList">
+                    <div class="text-muted">Cargando comentarios...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ID de orden de prueba (cambiar por uno real)
+        const ORDER_ID = 1;
+        
+        // Función para mostrar notificaciones
+        function showToast(type, message) {
+            const toast = document.createElement('div');
+            toast.className = `toast align-items-center text-white bg-${type} border-0`;
+            toast.setAttribute('role', 'alert');
+            toast.innerHTML = `
+                <div class="d-flex">
+                    <div class="toast-body">${message}</div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            `;
+            
+            document.body.appendChild(toast);
+            const bsToast = new bootstrap.Toast(toast);
+            bsToast.show();
+            
+            setTimeout(() => {
+                if (document.body.contains(toast)) {
+                    document.body.removeChild(toast);
+                }
+            }, 5000);
+        }
+        
+        // Manejo del formulario
+        document.getElementById('commentForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            console.log('=== INICIO AGREGAR COMENTARIO ===');
+            
+            const comment = document.getElementById('commentText').value;
+            const author = document.getElementById('commentAuthor').value;
+            const type = document.getElementById('commentType').value;
+            
+            console.log('Datos del comentario:', { comment, author, type });
+            
+            if (!comment.trim()) {
+                console.log('Error: Comentario vacío');
+                showToast('error', 'Por favor escribe un comentario');
+                return;
+            }
+            
+            // Mostrar indicador de carga
+            const submitBtn = document.querySelector('#commentForm button[type="submit"]');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Agregando...';
+            submitBtn.disabled = true;
+            
+            try {
+                console.log('Enviando petición a:', `/orders/${ORDER_ID}/comments`);
+                
+                const response = await fetch(`/orders/${ORDER_ID}/comments`, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        comment: comment,
+                        author: author,
+                        type: type
+                    })
+                });
+                
+                console.log('Respuesta recibida:', response.status, response.statusText);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Datos de respuesta:', data);
+                
+                if (data.ok) {
+                    console.log('Comentario agregado exitosamente');
+                    showToast('success', 'Comentario agregado correctamente');
+                    document.getElementById('commentText').value = '';
+                    loadComments(); // Recargar comentarios
+                } else {
+                    console.log('Error del servidor:', data.error);
+                    showToast('error', data.error || 'Error al agregar comentario');
+                }
+            } catch (error) {
+                console.error('Error completo:', error);
+                showToast('error', `Error de conexión: ${error.message}`);
+            } finally {
+                // Restaurar botón
+                submitBtn.innerHTML = originalText;
+                submitBtn.disabled = false;
+                console.log('=== FIN AGREGAR COMENTARIO ===');
+            }
+        });
+        
+        // Cargar comentarios
+        async function loadComments() {
+            try {
+                console.log('Cargando comentarios...');
+                const response = await fetch(`/orders/${ORDER_ID}/comments`, {
+                    credentials: 'same-origin',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                console.log('Respuesta de comentarios:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Datos de comentarios:', data);
+                
+                if (data.ok) {
+                    const commentsList = document.getElementById('commentsList');
+                    commentsList.innerHTML = '';
+                    
+                    if (data.comments && data.comments.length > 0) {
+                        data.comments.forEach(comment => {
+                            const commentDiv = document.createElement('div');
+                            commentDiv.className = 'card mb-2';
+                            commentDiv.innerHTML = `
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <p class="mb-1 small">${comment.comment}</p>
+                                            <div class="d-flex justify-content-between">
+                                                <small class="text-muted">
+                                                    <i class="bi bi-person-fill me-1"></i>${comment.author}
+                                                </small>
+                                                <small class="text-muted">
+                                                    <i class="bi bi-stopwatch me-1"></i>${new Date(comment.created_at).toLocaleString('es-ES')}
+                                                </small>
+                                            </div>
+                                        </div>
+                                        <span class="badge bg-secondary">${comment.comment_type}</span>
+                                    </div>
+                                </div>
+                            `;
+                            commentsList.appendChild(commentDiv);
+                        });
+                    } else {
+                        commentsList.innerHTML = '<div class="text-muted">No hay comentarios</div>';
+                    }
+                } else {
+                    throw new Error(data.error || 'Error al cargar comentarios');
+                }
+            } catch (error) {
+                console.error('Error cargando comentarios:', error);
+                document.getElementById('commentsList').innerHTML = 
+                    `<div class="text-danger">Error cargando comentarios: ${error.message}</div>`;
+            }
+        }
+        
+        // Cargar comentarios al iniciar
+        loadComments();
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
