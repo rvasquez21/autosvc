@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: autosvc
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m waitress --listen=0.0.0.0:$PORT app:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+
