@@ -1293,27 +1293,49 @@ def admin_required(f):
 # ---------- Flask-Login Callback ----------
 @login_manager.user_loader
 def load_user(user_id):
-    return User.query.get(int(user_id))
+    """Cargar usuario desde la base de datos"""
+    try:
+        return User.query.get(int(user_id))
+    except Exception as e:
+        print(f"Error cargando usuario {user_id}: {e}")
+        return None
 
 # ---------- Routes ----------
 # Rutas de Autenticación
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    if current_user.is_authenticated:
-        return redirect(url_for('dashboard'))
-    
-    form = LoginForm()
-    if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
-        if user and user.check_password(form.password.data) and user.is_active:
-            login_user(user)
-            flash(f'¡Bienvenido, {user.full_name}!', 'success')
-            next_page = request.args.get('next')
-            return redirect(next_page) if next_page else redirect(url_for('dashboard'))
-        else:
-            flash('Usuario o contraseña incorrectos', 'error')
-    
-    return render_template("login.html", form=form)
+    try:
+        # Verificar si el usuario está autenticado de forma segura
+        try:
+            if current_user.is_authenticated:
+                return redirect(url_for('dashboard'))
+        except Exception as auth_error:
+            # Si hay error al verificar autenticación, continuar con el login
+            print(f"Warning: Error verificando autenticación: {auth_error}")
+        
+        form = LoginForm()
+        if form.validate_on_submit():
+            try:
+                user = User.query.filter_by(username=form.username.data).first()
+                if user and user.check_password(form.password.data) and user.is_active:
+                    login_user(user)
+                    flash(f'¡Bienvenido, {user.full_name}!', 'success')
+                    next_page = request.args.get('next')
+                    return redirect(next_page) if next_page else redirect(url_for('dashboard'))
+                else:
+                    flash('Usuario o contraseña incorrectos', 'error')
+            except Exception as db_error:
+                print(f"Error en login (base de datos): {db_error}")
+                flash('Error de conexión a la base de datos. Por favor, contacta al administrador.', 'error')
+        
+        return render_template("login.html", form=form)
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"Error en ruta /login: {e}")
+        print(f"Traceback: {error_trace}")
+        # Re-lanzar para que el handler de errores lo capture
+        raise
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
