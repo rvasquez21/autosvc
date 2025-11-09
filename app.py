@@ -3607,33 +3607,103 @@ def internal_error(error):
     try:
         # Mostrar traceback solo en desarrollo
         show_traceback = os.environ.get('FLASK_ENV') != 'production' or os.environ.get('FLASK_DEBUG') == '1'
-        return render_template('error.html', 
-                             error=str(error), 
-                             traceback=error_trace if show_traceback else None, 
-                             message="Error interno del servidor"), 500
+        # Usar un contexto mínimo para evitar errores circulares
+        try:
+            return render_template('error.html', 
+                                 error=str(error), 
+                                 traceback=error_trace if show_traceback else None, 
+                                 message="Error interno del servidor"), 500
+        except Exception as render_error:
+            # Si el render falla, puede ser por contexto corrupto, intentar con contexto limpio
+            print(f"Error en render_template: {render_error}")
+            # Crear un contexto mínimo
+            from flask import has_request_context, request
+            if not has_request_context():
+                # Si no hay contexto de request, crear uno mínimo
+                with app.test_request_context('/'):
+                    return render_template('error.html', 
+                                         error=str(error), 
+                                         traceback=error_trace if show_traceback else None, 
+                                         message="Error interno del servidor"), 500
+            else:
+                raise render_error
     except Exception as template_error:
         print(f"Error renderizando template de error: {template_error}")
         print(f"Error original: {error}")
-        # Fallback: respuesta HTML simple sin depender de templates
+        import traceback as tb
+        print(f"Traceback del error de template: {tb.format_exc()}")
+        # Fallback: respuesta HTML simple sin depender de templates ni contexto de Flask
         html_response = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Error 500</title>
+    <title>Error 500 - AutoSVC</title>
     <style>
-        body {{ font-family: Arial, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }}
-        h1 {{ color: #dc3545; }}
-        .error-box {{ background: #f8d7da; border: 1px solid #f5c6cb; padding: 15px; border-radius: 5px; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            padding: 20px;
+        }}
+        .error-container {{
+            max-width: 600px;
+            width: 100%;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }}
+        .error-header {{
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }}
+        .error-body {{
+            padding: 30px;
+        }}
+        h1 {{ color: #dc3545; margin: 0 0 20px 0; }}
+        .error-box {{
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }}
+        .btn {{
+            display: inline-block;
+            padding: 10px 20px;
+            background: #0d6efd;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+        }}
+        .btn:hover {{
+            background: #0b5ed7;
+        }}
     </style>
 </head>
 <body>
-    <h1>Error 500 - Error Interno del Servidor</h1>
-    <div class="error-box">
-        <p>Ha ocurrido un error en el servidor. Por favor, contacta al administrador.</p>
-        <p><strong>Error:</strong> {str(error)}</p>
+    <div class="error-container">
+        <div class="error-header">
+            <h1>⚠️ Error 500</h1>
+            <p style="margin: 0;">Error Interno del Servidor</p>
+        </div>
+        <div class="error-body">
+            <div class="error-box">
+                <p><strong>Ha ocurrido un error en el servidor.</strong></p>
+                <p>Por favor, contacta al administrador del sistema.</p>
+                <p><strong>Error:</strong> {str(error)}</p>
+            </div>
+            <a href="/" class="btn">Volver al inicio</a>
+        </div>
     </div>
-    <p><a href="/">Volver al inicio</a></p>
 </body>
 </html>"""
         return html_response, 500, {'Content-Type': 'text/html; charset=utf-8'}
