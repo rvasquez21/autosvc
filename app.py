@@ -9,10 +9,15 @@ from wtforms import StringField, PasswordField, SelectField, TextAreaField, Date
 from wtforms.validators import DataRequired, Length, Email, NumberRange
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pandas as pd
 import os
 from sqlalchemy import or_, and_
+
+# Función helper para reemplazar datetime.utcnow() (deprecado)
+def utcnow():
+    """Retorna la fecha y hora actual en UTC (reemplazo de datetime.utcnow())"""
+    return datetime.now(timezone.utc)
 
 app = Flask(__name__)
 app.config.from_object("config.Config")
@@ -51,7 +56,7 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), default="TECNICO")  # ADMIN, TECNICO, ASESOR, JEFE_TALLER, SUPERVISOR
     full_name = db.Column(db.String(120), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
     
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -82,15 +87,15 @@ class Order(db.Model):
     symptom = db.Column(db.Text)
     priority = db.Column(db.String(10), default="NORMAL")  # URGENTE | NORMAL | BAJA
     promised_date = db.Column(db.DateTime, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     
     # Relaciones
     status_history = db.relationship('StatusHistory', backref='order', lazy=True, cascade='all, delete-orphan')
     comments = db.relationship('OrderComment', backref='order', lazy=True, cascade='all, delete-orphan')
 
     def days_in_shop(self):
-        return (datetime.utcnow().date() - self.created_at.date()).days
+        return (utcnow().date() - self.created_at.date()).days
 
 class StatusHistory(db.Model):
     __tablename__ = "status_history"
@@ -100,7 +105,7 @@ class StatusHistory(db.Model):
     new_status = db.Column(db.String(30), nullable=False)
     changed_by = db.Column(db.String(120))  # Usuario que hizo el cambio
     change_reason = db.Column(db.Text)      # Razón del cambio
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
 class OrderComment(db.Model):
     __tablename__ = "order_comments"
@@ -109,7 +114,7 @@ class OrderComment(db.Model):
     comment = db.Column(db.Text, nullable=False)
     author = db.Column(db.String(120))      # Autor del comentario
     comment_type = db.Column(db.String(20), default="GENERAL")  # GENERAL, INTERNAL, CUSTOMER
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
 
 class Technician(db.Model):
     __tablename__ = "technicians"
@@ -121,10 +126,10 @@ class Technician(db.Model):
     specialty = db.Column(db.String(100))  # Especialidad (Motor, Frenos, etc.)
     hourly_rate = db.Column(db.Float, default=0.0)  # Tarifa por hora
     is_active = db.Column(db.Boolean, default=True)
-    hire_date = db.Column(db.DateTime, default=datetime.utcnow)
+    hire_date = db.Column(db.DateTime, default=utcnow)
     notes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     
     # Relaciones
     hours_records = db.relationship('TechnicianHours', backref='technician', lazy=True, foreign_keys='TechnicianHours.technician_id')
@@ -143,11 +148,11 @@ class Advisor(db.Model):
     department = db.Column(db.String(100))  # Departamento (Ventas, Servicio, etc.)
     commission_rate = db.Column(db.Float, default=0.0)  # Tasa de comisión
     is_active = db.Column(db.Boolean, default=True)
-    hire_date = db.Column(db.DateTime, default=datetime.utcnow)
+    hire_date = db.Column(db.DateTime, default=utcnow)
     notes = db.Column(db.Text)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)  # Enlace con usuario del sistema
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     
     # Relaciones
     assigned_orders = db.relationship('Order', backref='assigned_advisor', lazy=True, foreign_keys='Order.advisor_id')
@@ -165,7 +170,7 @@ class TechnicianHours(db.Model):
     date_worked = db.Column(db.DateTime, nullable=False)
     hours_worked = db.Column(db.Float, nullable=False)
     description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
     created_by = db.Column(db.String(120))  # Usuario que registró las horas
 
 class Status(db.Model):
@@ -178,8 +183,8 @@ class Status(db.Model):
     is_active = db.Column(db.Boolean, default=True)  # Si el estatus está activo
     sort_order = db.Column(db.Integer, default=0)  # Orden de visualización
     is_final = db.Column(db.Boolean, default=False)  # Si es un estatus final (ej: ENTREGADO)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     
     # Relaciones - No hay foreign key directo, se relaciona por el campo status (string)
     
@@ -195,8 +200,8 @@ class PaintShopInfo(db.Model):
     delivery_date = db.Column(db.DateTime, nullable=True)  # Fecha de entrega
     insurance_order_copy = db.Column(db.String(500), nullable=True)  # Ruta del archivo de copia de orden de seguro
     notes = db.Column(db.Text)  # Notas adicionales
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     
     # Relaciones
     order = db.relationship('Order', backref=db.backref('paint_shop_info', uselist=False))
@@ -219,8 +224,8 @@ class Repuesto(db.Model):
     costo_total = db.Column(db.Float)  # Costo total
     proveedor = db.Column(db.String(200))  # Proveedor
     notas = db.Column(db.Text)  # Notas adicionales
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     
     # Relación con Order
     order = db.relationship('Order', backref=db.backref('repuestos', lazy=True))
@@ -238,7 +243,7 @@ class Notification(db.Model):
     notification_type = db.Column(db.String(50), default="INFO")  # INFO, WARNING, SUCCESS, ORDER_CHANGE, COMMENT
     is_read = db.Column(db.Boolean, default=False)  # Si la notificación ha sido leída
     created_by = db.Column(db.String(120))  # Usuario que creó la notificación
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
     
     # Relaciones
     user = db.relationship('User', backref=db.backref('notifications', lazy=True))
@@ -252,12 +257,12 @@ class AdvisorContact(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=False)
     advisor_id = db.Column(db.Integer, db.ForeignKey('advisors.id'), nullable=False)
-    contact_date = db.Column(db.DateTime, default=datetime.utcnow)  # Fecha del último contacto
+    contact_date = db.Column(db.DateTime, default=utcnow)  # Fecha del último contacto
     contact_type = db.Column(db.String(50), default="CALL")  # CALL, EMAIL, VISIT, MESSAGE
     notes = db.Column(db.Text)  # Notas sobre el contacto
     next_reminder_date = db.Column(db.DateTime)  # Próxima fecha de recordatorio (24 horas después)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=utcnow)
+    updated_at = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     
     # Relaciones
     order = db.relationship('Order', backref=db.backref('advisor_contacts', lazy=True))
@@ -433,7 +438,7 @@ def check_contact_reminders():
             advisor_id=order.advisor_id
         ).order_by(AdvisorContact.contact_date.desc()).first()
         
-        now = datetime.utcnow()
+        now = utcnow()
         
         if last_contact:
             # Verificar si han pasado 24 horas desde el último contacto
@@ -631,7 +636,7 @@ class UserForm(FlaskForm):
 class TechnicianHoursForm(FlaskForm):
     technician_name = StringField('Técnico', validators=[DataRequired()])
     order_id = SelectField('Orden (opcional)', coerce=int, choices=[])
-    date_worked = DateTimeField('Fecha de Trabajo', validators=[DataRequired()], default=datetime.utcnow)
+    date_worked = DateTimeField('Fecha de Trabajo', validators=[DataRequired()], default=utcnow)
     hours_worked = IntegerField('Horas Trabajadas', validators=[DataRequired()])
     description = TextAreaField('Descripción del Trabajo')
     submit = SubmitField('Registrar Horas')
@@ -666,7 +671,7 @@ class TechnicianForm(FlaskForm):
     ])
     hourly_rate = IntegerField('Tarifa por Hora', default=0)
     is_active = SelectField('Estado', choices=[(True, 'Activo'), (False, 'Inactivo')], default=True, coerce=to_bool)
-    hire_date = DateTimeField('Fecha de Contratación', default=datetime.utcnow)
+    hire_date = DateTimeField('Fecha de Contratación', default=utcnow)
     notes = TextAreaField('Notas')
     submit = SubmitField('Guardar Técnico')
 
@@ -686,7 +691,7 @@ class AdvisorForm(FlaskForm):
     ])
     commission_rate = FloatField('Tasa de Comisión (%)', default=0.0)
     is_active = SelectField('Estado', choices=[(True, 'Activo'), (False, 'Inactivo')], default=True, coerce=to_bool)
-    hire_date = DateTimeField('Fecha de Contratación', default=datetime.utcnow)
+    hire_date = DateTimeField('Fecha de Contratación', default=utcnow)
     user_id = SelectField('Usuario del Sistema (Opcional)', coerce=to_int_or_none, choices=[])
     notes = TextAreaField('Notas')
     submit = SubmitField('Guardar Asesor')
@@ -703,7 +708,7 @@ class StatusForm(FlaskForm):
 
 class PaintShopInfoForm(FlaskForm):
     shop_name = StringField('Nombre del Taller', validators=[DataRequired(), Length(min=2, max=200)])
-    send_date = DateField('Fecha de Envío', validators=[DataRequired()], default=datetime.utcnow().date)
+    send_date = DateField('Fecha de Envío', validators=[DataRequired()], default=lambda: datetime.now(timezone.utc).date())
     delivery_date = DateField('Fecha de Entrega (opcional)')
     insurance_order_copy = FileField('Copia de Orden de Seguro', 
                                    validators=[FileAllowed(['jpg', 'jpeg', 'png', 'pdf'], 'Solo archivos de imagen y PDF')])
@@ -1227,7 +1232,7 @@ def parse_orders_file(file_path):
                 
                 # Si no se encontró fecha de recepción, usar fecha actual como fallback
                 if reception_date is None:
-                    reception_date = datetime.utcnow()
+                    reception_date = utcnow()
                     print(f"   ⚠️  No se encontró fecha de recepción, usando fecha actual: {reception_date.date()}")
                 
                 # Buscar fecha prometida
@@ -1258,7 +1263,7 @@ def parse_orders_file(file_path):
                     'symptom': str(row.get('comments', '')).strip() if pd.notna(row.get('comments')) else '',
                     'priority': str(row.get('priority', 'NORMAL')).strip() if pd.notna(row.get('priority')) else 'NORMAL',
                     'promised_date': promised_date,
-                    'reception_date': reception_date or datetime.utcnow()
+                    'reception_date': reception_date or utcnow()
                 }
                 
                 processed_orders.append(order_data)
@@ -1521,7 +1526,7 @@ def new_order():
             advisor_id=advisor_id or None,
             technician=technician.full_name if technician else None,  # Para compatibilidad
             technician_id=technician_id or None,
-            technician_assigned_at=datetime.utcnow() if technician_id else None,  # Fecha de asignación
+            technician_assigned_at=utcnow() if technician_id else None,  # Fecha de asignación
             service_type=request.form.get("service_type") or "Mantenimiento",
             status=request.form.get("status") or "RECEPCION",
             priority=request.form.get("priority") or "NORMAL",
@@ -1611,7 +1616,7 @@ def edit_order(order_id):
         
         # Actualizar fecha de asignación al técnico si se asigna por primera vez
         if not old_technician_id and new_technician_id:
-            order.technician_assigned_at = datetime.utcnow()
+            order.technician_assigned_at = utcnow()
         elif old_technician_id and not new_technician_id:
             order.technician_assigned_at = None
         
@@ -2537,7 +2542,7 @@ def technician_orders():
         
         oldest_days = 0
         if oldest_unfinished:
-            oldest_days = (datetime.utcnow().date() - oldest_unfinished.created_at.date()).days
+            oldest_days = (utcnow().date() - oldest_unfinished.created_at.date()).days
         
         technician_orders_summary.append({
             'technician': technician,
@@ -2757,7 +2762,7 @@ def upload_orders():
                         existing_order.symptom = order_data['symptom']
                         existing_order.priority = order_data['priority']
                         existing_order.promised_date = order_data['promised_date']
-                        existing_order.updated_at = datetime.utcnow()
+                        existing_order.updated_at = utcnow()
                         orders_updated += 1
                     else:
                         # Crear nueva orden
@@ -3321,19 +3326,19 @@ def register_contact(order_id):
     
     if contact:
         # Actualizar contacto existente
-        contact.contact_date = datetime.utcnow()
+        contact.contact_date = utcnow()
         contact.contact_type = contact_type
         contact.notes = notes
-        contact.next_reminder_date = datetime.utcnow() + timedelta(hours=24)
+        contact.next_reminder_date = utcnow() + timedelta(hours=24)
     else:
         # Crear nuevo contacto
         contact = AdvisorContact(
             order_id=order.id,
             advisor_id=order.advisor_id,
-            contact_date=datetime.utcnow(),
+            contact_date=utcnow(),
             contact_type=contact_type,
             notes=notes,
-            next_reminder_date=datetime.utcnow() + timedelta(hours=24)
+            next_reminder_date=utcnow() + timedelta(hours=24)
         )
         db.session.add(contact)
     
@@ -3552,7 +3557,7 @@ def validate_advisor_links():
 @app.template_global()
 def now():
     """Función para obtener la fecha y hora actual en templates"""
-    return datetime.utcnow()
+    return utcnow()
 
 # Manejo de errores para producción
 @app.errorhandler(500)
