@@ -1880,45 +1880,81 @@ def dashboard():
                                  selected_brand=brand_filter)
         except Exception as template_error:
             print(f"Error renderizando template dashboard.html: {template_error}")
+            import traceback
+            print(f"Traceback completo: {traceback.format_exc()}")
             # Fallback: HTML inline para el dashboard
-            import html as html_module
-            
-            # Generar HTML para conteos por estatus
-            status_cards = ""
-            for status_name, display_name in status_choices:
-                count = counts.get(status_name, 0)
-                color = status_colors.get(status_name, "#6c757d")
-                status_cards += f"""
-                <div style="background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center;">
-                    <div style="font-size: 2.5rem; font-weight: bold; color: {color}; margin-bottom: 10px;">{count}</div>
-                    <div style="color: #6c757d; font-size: 0.9rem;">{html_module.escape(display_name)}</div>
-                </div>"""
-            
-            # Generar HTML para órdenes con 15+ días
-            long_orders_html = ""
-            if long_15:
-                for order in long_15:
-                    long_orders_html += f"""
-                    <tr>
-                        <td>{order.id}</td>
-                        <td><a href="/orders/{order.id}" style="color: #0d6efd; text-decoration: none;">{html_module.escape(order.order_number)}</a></td>
-                        <td><span style="background: #0dcaf0; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(order.modelo or '-')}</span></td>
-                        <td><span style="background: #0d6efd; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(order.brand or '-')}</span></td>
-                        <td><span style="background: #6c757d; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(order.plate)}</span></td>
-                        <td>{html_module.escape(order.customer_name)}</td>
-                        <td><strong>{order.days_in_shop()}</strong></td>
-                        <td><span style="background: {status_colors.get(order.status, '#6c757d')}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(order.status)}</span></td>
-                    </tr>"""
-            else:
-                long_orders_html = "<tr><td colspan='8' style='text-align: center; color: #6c757d; padding: 20px;'>No hay órdenes con 15+ días en taller</td></tr>"
-            
-            # Generar opciones de filtro de marca
-            brand_options = '<option value="">Todas las marcas</option>'
-            for brand in brands:
-                selected = "selected" if brand == brand_filter else ""
-                brand_options += f'<option value="{html_module.escape(brand)}" {selected}>{html_module.escape(brand)}</option>'
-            
-            html_response = f"""<!DOCTYPE html>
+            try:
+                import html as html_module
+                
+                # Obtener nombre de usuario de forma segura
+                user_name = "Usuario"
+                try:
+                    if current_user.is_authenticated:
+                        user_name = current_user.full_name
+                except:
+                    pass
+                
+                # Generar HTML para conteos por estatus
+                status_cards = ""
+                try:
+                    for status_name, display_name in status_choices:
+                        count = counts.get(status_name, 0)
+                        color = status_colors.get(status_name, "#6c757d")
+                        status_cards += f"""
+                        <div style="background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); text-align: center;">
+                            <div style="font-size: 2.5rem; font-weight: bold; color: {color}; margin-bottom: 10px;">{count}</div>
+                            <div style="color: #6c757d; font-size: 0.9rem;">{html_module.escape(str(display_name))}</div>
+                        </div>"""
+                except Exception as e:
+                    print(f"Error generando status_cards: {e}")
+                    status_cards = "<div>Error cargando estatus</div>"
+                
+                # Generar HTML para órdenes con 15+ días
+                long_orders_html = ""
+                try:
+                    if long_15:
+                        for order in long_15:
+                            try:
+                                modelo = str(order.modelo) if order.modelo else '-'
+                                brand = str(order.brand) if order.brand else '-'
+                                plate = str(order.plate) if order.plate else '-'
+                                customer = str(order.customer_name) if order.customer_name else '-'
+                                order_num = str(order.order_number) if order.order_number else '-'
+                                status = str(order.status) if order.status else '-'
+                                days = order.days_in_shop() if hasattr(order, 'days_in_shop') else 0
+                                order_color = status_colors.get(order.status, '#6c757d')
+                                
+                                long_orders_html += f"""
+                                <tr>
+                                    <td>{order.id}</td>
+                                    <td><a href="/orders/{order.id}" style="color: #0d6efd; text-decoration: none;">{html_module.escape(order_num)}</a></td>
+                                    <td><span style="background: #0dcaf0; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(modelo)}</span></td>
+                                    <td><span style="background: #0d6efd; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(brand)}</span></td>
+                                    <td><span style="background: #6c757d; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(plate)}</span></td>
+                                    <td>{html_module.escape(customer)}</td>
+                                    <td><strong>{days}</strong></td>
+                                    <td><span style="background: {order_color}; color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.85rem;">{html_module.escape(status)}</span></td>
+                                </tr>"""
+                            except Exception as order_error:
+                                print(f"Error procesando orden {order.id if hasattr(order, 'id') else 'unknown'}: {order_error}")
+                                continue
+                    else:
+                        long_orders_html = "<tr><td colspan='8' style='text-align: center; color: #6c757d; padding: 20px;'>No hay órdenes con 15+ días en taller</td></tr>"
+                except Exception as e:
+                    print(f"Error generando long_orders_html: {e}")
+                    long_orders_html = "<tr><td colspan='8' style='text-align: center; color: #dc3545; padding: 20px;'>Error cargando órdenes</td></tr>"
+                
+                # Generar opciones de filtro de marca
+                brand_options = '<option value="">Todas las marcas</option>'
+                try:
+                    for brand in brands:
+                        if brand:
+                            selected = "selected" if str(brand) == str(brand_filter) else ""
+                            brand_options += f'<option value="{html_module.escape(str(brand))}" {selected}>{html_module.escape(str(brand))}</option>'
+                except Exception as e:
+                    print(f"Error generando brand_options: {e}")
+                
+                html_response = f"""<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -2021,7 +2057,7 @@ def dashboard():
 <body>
     <div class="header">
         <h1>📊 Dashboard - AutoSVC</h1>
-        <p>Bienvenido, {html_module.escape(current_user.full_name if current_user.is_authenticated else 'Usuario')}</p>
+        <p>Bienvenido, {html_module.escape(user_name)}</p>
     </div>
     
     <div class="nav">
@@ -2080,7 +2116,21 @@ def dashboard():
     </div>
 </body>
 </html>"""
-            return html_response, 200, {'Content-Type': 'text/html; charset=utf-8'}
+                return html_response, 200, {'Content-Type': 'text/html; charset=utf-8'}
+            except Exception as fallback_error:
+                print(f"Error en fallback HTML del dashboard: {fallback_error}")
+                import traceback
+                print(f"Traceback del fallback: {traceback.format_exc()}")
+                # Si incluso el fallback falla, retornar un mensaje simple
+                return f"""<!DOCTYPE html>
+<html>
+<head><title>Error</title></head>
+<body style="font-family: Arial; padding: 50px; text-align: center;">
+    <h1>Error cargando dashboard</h1>
+    <p>Por favor, contacta al administrador.</p>
+    <a href="/logout">Cerrar sesión</a>
+</body>
+</html>""", 500, {'Content-Type': 'text/html; charset=utf-8'}
     except Exception as e:
         import traceback
         error_trace = traceback.format_exc()
