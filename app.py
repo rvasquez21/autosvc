@@ -3629,24 +3629,35 @@ def internal_error(error):
     try:
         # Mostrar traceback solo en desarrollo
         show_traceback = os.environ.get('FLASK_ENV') != 'production' or os.environ.get('FLASK_DEBUG') == '1'
-        # Usar un contexto mínimo para evitar errores circulares
+        # Preparar variables de forma segura
+        error_str = str(error) if error else "Error desconocido"
+        message_str = "Error interno del servidor"
+        traceback_str = error_trace if show_traceback else None
+        
+        # Intentar renderizar con contexto mínimo
         try:
             return render_template('error.html', 
-                                 error=str(error), 
-                                 traceback=error_trace if show_traceback else None, 
-                                 message="Error interno del servidor"), 500
+                                 error=error_str, 
+                                 traceback=traceback_str, 
+                                 message=message_str), 500
         except Exception as render_error:
             # Si el render falla, puede ser por contexto corrupto, intentar con contexto limpio
             print(f"Error en render_template: {render_error}")
+            import traceback as tb
+            print(f"Traceback del render_error: {tb.format_exc()}")
             # Crear un contexto mínimo
-            from flask import has_request_context, request
+            from flask import has_request_context
             if not has_request_context():
                 # Si no hay contexto de request, crear uno mínimo
-                with app.test_request_context('/'):
-                    return render_template('error.html', 
-                                         error=str(error), 
-                                         traceback=error_trace if show_traceback else None, 
-                                         message="Error interno del servidor"), 500
+                try:
+                    with app.test_request_context('/'):
+                        return render_template('error.html', 
+                                             error=error_str, 
+                                             traceback=traceback_str, 
+                                             message=message_str), 500
+                except Exception as context_error:
+                    print(f"Error con contexto de test: {context_error}")
+                    raise render_error
             else:
                 raise render_error
     except Exception as template_error:
